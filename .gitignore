@@ -1,0 +1,5 @@
+/dist
+/.idea
+/.pytest_cache
+/.tox
+__pycache__
