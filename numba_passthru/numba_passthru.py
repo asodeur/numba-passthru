@@ -2,14 +2,24 @@
 # TODO: will become obsolete once PR https://github.com/numba/numba/pull/3640 has landed in Numba
 #############################################################################################################
 
-
-from numba import cgutils, types
-from numba.datamodel import models
-from numba.extending import make_attribute_wrapper, overload, overload_method, register_model, type_callable
-from numba.pythonapi import NativeValue, unbox, box
-from numba.targets.hashing import _Py_hash_t
-from numba.targets.imputils import lower_builtin
-from numba.typing.typeof import typeof_impl
+try:
+    # module locations as of numba 0.49.0
+    from numba.core import cgutils, types
+    from numba.core.datamodel import models
+    from numba.extending import make_attribute_wrapper, overload, overload_method, register_model, type_callable
+    from numba.core.pythonapi import NativeValue, unbox, box
+    from numba.cpython.hashing import _Py_hash_t
+    from numba.core.imputils import lower_builtin
+    from numba.core.typing.typeof import typeof_impl
+except ImportError:
+    # module locations prior to numba 0.49.0
+    from numba import cgutils, types
+    from numba.datamodel import models
+    from numba.extending import make_attribute_wrapper, overload, overload_method, register_model, type_callable
+    from numba.pythonapi import NativeValue, unbox, box
+    from numba.targets.hashing import _Py_hash_t
+    from numba.targets.imputils import lower_builtin
+    from numba.typing.typeof import typeof_impl
 
 from operator import is_, eq
 from llvmlite.llvmpy.core import Constant
