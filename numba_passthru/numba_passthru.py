@@ -90,7 +90,9 @@ except ImportError:
             return self._obj
 
         def __eq__(self, other):
-            return isinstance(other, PassThruContainer) and self.obj is other.obj
+            if not isinstance(other, PassThruContainer):
+                raise NotImplementedError
+            return self.obj is other.obj
 
         def __hash__(self):
             return object.__hash__(self.obj)
@@ -177,17 +179,11 @@ except ImportError:
 
     @overload(eq)
     def pass_thru_container_eq(x, y):
-        if x is PassThruContainerType():
-            if y is PassThruContainerType():
-                def pass_thru_container_pass_thru_container_eq_impl(x, y):
-                    return x.wrapped_obj is y.wrapped_obj
+        if x is pass_thru_container_type and y is pass_thru_container_type:
+            def pass_thru_container_pass_thru_container_eq_impl(x, y):
+                return x.wrapped_obj is y.wrapped_obj
 
-                return pass_thru_container_pass_thru_container_eq_impl
-            else:
-                def pass_thru_container_any_eq_impl(x, y):
-                    return False
-
-                return pass_thru_container_any_eq_impl
+            return pass_thru_container_pass_thru_container_eq_impl
 
 
     @overload_method(PassThruContainerType, '__hash__')

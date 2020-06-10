@@ -1,6 +1,6 @@
 from contextlib import contextmanager
 import gc
-from numba import jit, objmode, types
+from numba import jit, objmode, types, TypingError
 from numba import cgutils
 from numba.config import MACHINE_BITS
 from numba.datamodel import models
@@ -126,6 +126,34 @@ class PassThruContainerTest(TestCase):
             self.assertEqual(c3.obj['A'], 1)
             self.assertEqual(c3.obj['b'], 2)
             del c1, c2, c3, c4
+
+    def test_eq_any(self):
+        obj1 = dict(a=1)
+        c1=PassThruContainer(obj1)
+
+        @jit(nopython=True)
+        def container_eq_any(x, y):
+            return x == y
+
+        with self.assertRaises(NotImplementedError) as context:
+            c1 == 1
+
+        with self.assertRaises(TypingError) as context:
+            r = container_eq_any(c1, 1)
+
+        self.assertTrue(
+            'Invalid use of Function(<built-in function eq>) with argument(s) of type(s)' in str(context.exception)
+        )
+
+        with self.assertRaises(NotImplementedError) as context:
+            1 == c1
+
+        with self.assertRaises(TypingError) as context:
+            r = container_eq_any(1, c1)
+
+        self.assertTrue(
+            'Invalid use of Function(<built-in function eq>) with argument(s) of type(s)' in str(context.exception)
+        )
 
     def test_hash(self):
         obj = dict(a=1)
