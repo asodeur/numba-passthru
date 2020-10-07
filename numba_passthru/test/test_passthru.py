@@ -1,22 +1,18 @@
 from contextlib import contextmanager
 import gc
-from numba import jit, objmode, types, TypingError
+from numba import jit, objmode, typed, types, TypingError
 from numba.core import cgutils
 from numba.core.config import MACHINE_BITS
 from numba.core.datamodel import models
-from numba.core.errors import NumbaDeprecationWarning, NumbaPendingDeprecationWarning
 from numba.extending import box, NativeValue, register_model, typeof_impl, unbox, make_attribute_wrapper
 from numba.core.runtime.nrt import rtsys
 from numba_passthru import PassThruContainer, PassThruType, pass_thru_type
+import pytest
 from sys import getrefcount
-from unittest import TestCase
-import warnings
 
-warnings.simplefilter('ignore', category=NumbaDeprecationWarning)
-warnings.simplefilter('ignore', category=NumbaPendingDeprecationWarning)
 
 @contextmanager
-def check_numba_allocations(self, create_tracked_objects, extra_allocations=0, refcount_changes={}):
+def check_numba_allocations(self, create_tracked_objects=lambda: {}, extra_allocations=0, refcount_changes={}):
     track_refcounts = create_tracked_objects()
     refcounts = {k: getrefcount(v) for k, v in track_refcounts.items()}
     for k, v in refcount_changes.items():
@@ -30,23 +26,19 @@ def check_numba_allocations(self, create_tracked_objects, extra_allocations=0, r
         del tracked
 
         refcounts_after = {k: getrefcount(v) for k, v in track_refcounts.items()}
-        del track_refcounts
 
         after = rtsys.get_allocation_stats()
+        del track_refcounts
 
-        self.assertEqual(
-            refcounts,refcounts_after
-        )
-        self.assertEqual(
-            after.alloc - before.alloc - extra_allocations, after.free - before.free
-        )
+        assert refcounts == refcounts_after
+        assert after.alloc - before.alloc - extra_allocations == after.free - before.free
     finally:
         # try to trigger any __del__ that might not been called b/c of exceptions,
         # otherwise these show up randomly later
         gc.collect()
 
 
-class PassThruContainerTest(TestCase):
+class TestPassThruContainer:
     def test_identity(self):
         obj = dict(a=1)
 
@@ -61,10 +53,10 @@ class PassThruContainerTest(TestCase):
         with check_numba_allocations(self, (lambda: dict(c=PassThruContainer(obj)))) as (c,):
             r, a = container_identity(c)
 
-            self.assertIs(c, r)
-            self.assertEqual(a, 1)
-            self.assertEqual(c.obj['a'], 1)
-            self.assertEqual(c.obj['b'], 2)
+            assert c is r
+            assert a == 1
+            assert c.obj['a'] == 1
+            assert c.obj['b'] == 2
             del c, r
 
     def test_forget(self):
@@ -81,9 +73,9 @@ class PassThruContainerTest(TestCase):
         with check_numba_allocations(self, (lambda: dict(c=PassThruContainer(obj)))) as (c,):
             a = forget_container(c)
 
-            self.assertEqual(a, 1)
-            self.assertEqual(c.obj['a'], 1)
-            self.assertEqual(c.obj['b'], 2)
+            assert a == 1
+            assert c.obj['a'] == 1
+            assert c.obj['b'] == 2
             del c
 
     def test_eq(self):
@@ -115,16 +107,16 @@ class PassThruContainerTest(TestCase):
         ) as (c1, c2, c3, c4):
             a, A, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10 = container_eq(c1, c2, c3, c4)
 
-            self.assertEqual(a, 1)
-            self.assertEqual(A, 1)
-            self.assertEqual(
-                (r1, r2, r3, r4, r5, r6, r7, r8, r9, r10),
+            assert a == 1
+            assert A == 1
+            assert (
+                (r1, r2, r3, r4, r5, r6, r7, r8, r9, r10) ==
                 (c1 == c1, c1 == c2, c1 == c3, c1 == c4, c2 == c2, c2 == c3, c2 == c4, c3 == c3, c3 == c4, c4 == c4)
             )
-            self.assertEqual(c1.obj['a'], 1)
-            self.assertEqual(c1.obj['b'], 2)
-            self.assertEqual(c3.obj['A'], 1)
-            self.assertEqual(c3.obj['b'], 2)
+            assert c1.obj['a'] == 1
+            assert c1.obj['b'] == 2
+            assert c3.obj['A'] == 1
+            assert c3.obj['b'] == 2
             del c1, c2, c3, c4
 
     def test_eq_any(self):
@@ -135,27 +127,27 @@ class PassThruContainerTest(TestCase):
         def container_eq_any(x, y):
             return x == y
 
-        with self.assertRaises(NotImplementedError) as context:
+        with pytest.raises(NotImplementedError):
             c1 == 1
 
-        with self.assertRaises(TypingError) as context:
+        with pytest.raises(TypingError) as context:
             r = container_eq_any(c1, 1)
 
-        self.assertTrue(
-             str(context.exception).startswith(
+        assert (
+             str(context.value).startswith(
                  'Failed in nopython mode pipeline (step: nopython frontend)\n\x1b[1m\x1b[1m'
                  'No implementation of function Function(<built-in function eq>) found for signature:'
              )
         )
 
-        with self.assertRaises(NotImplementedError) as context:
+        with pytest.raises(NotImplementedError):
             1 == c1
 
-        with self.assertRaises(TypingError) as context:
+        with pytest.raises(TypingError) as context:
             r = container_eq_any(1, c1)
 
-        self.assertTrue(
-            str(context.exception).startswith(
+        assert (
+            str(context.value).startswith(
                 'Failed in nopython mode pipeline (step: nopython frontend)\n\x1b[1m\x1b[1m'
                 'No implementation of function Function(<built-in function eq>) found for signature:'
             )
@@ -171,7 +163,7 @@ class PassThruContainerTest(TestCase):
         with check_numba_allocations(self, (lambda: dict(c=PassThruContainer(obj)))) as (c,):
             res = container_hash(c)
 
-            self.assertEqual(hash(c), res)
+            assert hash(c) == res
             del c
 
 
@@ -184,29 +176,32 @@ class MyPassThru(object):
         self.something_not_boxable = object()
 
 
+my_pass_thru_type = PassThruType('MyPassThruType')
+
+
 @typeof_impl.register(MyPassThru)
 def type_my_passthru(val, context):
-    return PassThruType('MyPassThruType')
+    return my_pass_thru_type
 
 
-class MyPassThruTest(TestCase):
+class TestMyPassThru:
     def test_forget(self):
         with check_numba_allocations(self, (lambda: dict(o=MyPassThru()))) as (o,):
             _id = forget(o)
-            self.assertEqual(_id, id(o.something_not_boxable) & (2**MACHINE_BITS - 1))
+            assert _id == id(o.something_not_boxable) & (2**MACHINE_BITS - 1)
             del o
 
     def test_identity(self):
         with check_numba_allocations(self, (lambda: dict(o=MyPassThru()))) as (o,):
             o2 = identity(o)
-            self.assertIs(o, o2)
+            assert o is o2
             del o, o2
 
     def test_doubling(self):
         with check_numba_allocations(self, (lambda: dict(o=MyPassThru()))) as (o,):
             o2, o3 = double(o)
-            self.assertIs(o, o2)
-            self.assertIs(o, o3)
+            assert o is o2
+            assert o is o3
             del o, o2, o3
 
     def test_list_forget(self):
@@ -216,35 +211,36 @@ class MyPassThruTest(TestCase):
 
         def create_tracked():
             o = MyPassThru()
-            l = [o, o, o]
+            l = typed.List([o, o, o])
 
             return dict(l=l, o=o)
 
         with check_numba_allocations(self, create_tracked) as (l, o):
             one = forget_list(l)
-            self.assertIs(one, 1)
+            assert one is 1
             del o, l
 
     def test_list_identity(self):
         with check_numba_allocations(self, (lambda: dict(x=MyPassThru(), y=MyPassThru(), z=MyPassThru()))) as (x, y, z):
-            l = [x, y, z]
+            l = typed.List([x, y, z])
             l2 = identity(l)
-            self.assertIs(l, l2)
+            for ii in range(3):
+                assert l[ii] is l2[ii]
             del x, y, z, l, l2
 
     def test_list_create(self):
         with check_numba_allocations(self, (lambda: dict(x=MyPassThru(), y=MyPassThru()))) as (x, y):
             l = create_passthru_list(x, y)
 
-            self.assertIs(l[0], x)
-            self.assertIs(l[1], y)
+            assert l[0] is x
+            assert l[1] is y
 
             del l, x, y
 
     def test_list_copy(self):
         @jit(nopython=True)
         def copy_list(x):
-            the_copy = []
+            the_copy = typed.List()
             for ii in range(len(x)):
                 v = x[ii]
                 the_copy.append(v)
@@ -252,25 +248,23 @@ class MyPassThruTest(TestCase):
             return the_copy  # y
 
         with check_numba_allocations(self, (lambda: dict(x=MyPassThru(), y=MyPassThru()))) as (x, y):
-            l1 = [x, y]
+            l1 = typed.List([x, y])
 
             l2 = copy_list(l1)
 
-            self.assertIs(l2[0], x)
-            self.assertIs(l2[1], y)
+            assert l2[0] is x
+            assert l2[1] is y
 
             del l1, l2, x, y
 
     def test_list_doubling(self):
         with check_numba_allocations(self, (lambda: dict(x=MyPassThru(), y=MyPassThru(), z=MyPassThru()))) as (x, y, z):
-            l = [x, y, z]
+            l = typed.List([x, y, z])
 
             l2, l3 = double(l)
-            self.assertIs(l, l2)
-            self.assertIs(l, l3)
-            self.assertIs(l[0], x)
-            self.assertIs(l2[0], x)
-            self.assertIs(l3[0], x)
+            for ii in range(3):
+                assert l2[ii] is l[ii]
+                assert l3[ii] is l[ii]
 
             del x, y, z, l, l2, l3
 
@@ -284,9 +278,10 @@ class MyPassThruTest(TestCase):
 ###########################################################################
 
 class PassThruComplex(object):
-    def __init__(self, int_attr, passthru_attr, list_attr=[]):
+    def __init__(self, int_attr, passthru_attr, list_attr):
         self.int_attr = int_attr
         self.passthru_attr = passthru_attr
+        assert isinstance(list_attr, typed.List)
         self.list_attr = list_attr
 
         self.something_not_boxable = object()
@@ -304,7 +299,7 @@ class PassThruComplexModel(models.StructModel):
             ('parent', pass_thru_type),
             ('int_attr', types.intp),
             ('passthru_attr', pass_thru_type),
-            ('list_attr', types.List(pass_thru_type))
+            ('list_attr', types.ListType(pass_thru_type))
         ]
         super(PassThruComplexModel, self).__init__(dmm, fe_typ, members)
 
@@ -333,21 +328,9 @@ def unbox_passthru_complex(typ, obj, context):
     pass_thru.passthru_attr = context.unbox(pass_thru_type, passthru_attr).value
     context.pyapi.decref(passthru_attr)
 
-    # We want to have lists of PassThruComplexType. We must copy the list as nopython lists have
-    # a cleanup functions that will not get called for list members (ie forwarding like
-    # NativeValue(..., cleanup=list_attr_unboxed.cleanup) will not work).
-    list_attr_type = types.List(pass_thru_type) # force list reflected=False
-
     list_attr = context.pyapi.object_getattr_string(obj, 'list_attr')
-    py_list_obj = context.pyapi.unserialize(context.pyapi.serialize_object(list))
-    list_attr_copy = context.pyapi.call_function_objargs(py_list_obj, [list_attr])
+    pass_thru.list_attr = context.unbox(types.ListType(pass_thru_type), list_attr).value
     context.pyapi.decref(list_attr)
-    context.pyapi.decref(py_list_obj)
-
-    list_attr_unboxed = context.unbox(list_attr_type, list_attr_copy)
-    pass_thru.list_attr = list_attr_unboxed.value
-    context.pyapi.decref(list_attr_copy)
-    list_attr_unboxed.cleanup()
 
     # should have done this more often, errors most likely erased by subsequent pyapi call anyway ...
     is_error = cgutils.is_not_null(context.builder, context.pyapi.err_occurred())
@@ -370,59 +353,59 @@ def box_passthru_complex(typ, val, context):
     return obj
 
 
-class PassThruComplexTest(TestCase):
+class TestPassThruComplex:
     def test_forget(self):
         with check_numba_allocations(self, (lambda: dict(x=MyPassThru(), y=MyPassThru(), z=MyPassThru()))) as (x, y, z):
-            o = PassThruComplex(42, x, [y, z])
+            o = PassThruComplex(42, x, typed.List([y, z]))
 
             _id = forget(o)
-            self.assertEqual(_id, id(o.something_not_boxable) & (2**MACHINE_BITS - 1))
+            assert _id == id(o.something_not_boxable) & (2**MACHINE_BITS - 1)
             del o, x, y, z
 
     def test_identity(self):
         with check_numba_allocations(self, (lambda: dict(x=MyPassThru(), y=MyPassThru(), z=MyPassThru()))) as (x, y, z):
-            o = PassThruComplex(42, x, [y, z])
+            o = PassThruComplex(42, x, typed.List([y, z]))
 
             o2 = identity(o)
-            self.assertIs(o, o2)
+            assert o is o2
 
             del o, o2, x, y, z
 
     def test_doubling(self):
         with check_numba_allocations(self, (lambda: dict(x=MyPassThru(), y=MyPassThru(), z=MyPassThru()))) as (x, y, z):
-            o = PassThruComplex(42, x, [y, z])
+            o = PassThruComplex(42, x, typed.List([y, z]))
 
             o2, o3 = double(o)
-            self.assertIs(o, o2)
-            self.assertIs(o, o3)
+            assert o is o2
+            assert o is o3
 
             del o, o2, o3, x, y, z
 
     def test_attr_access(self):
         with check_numba_allocations(self, (lambda: dict(x=MyPassThru(), y=MyPassThru(), z=MyPassThru()))) as (x, y, z):
-            o = PassThruComplex(42, x, [y, z])
+            o = PassThruComplex(42, x, typed.List([y, z]))
 
             value, x2, (y2, z2) = attr_access(o, 'int_attr', 'passthru_attr', 'list_attr')
 
-            self.assertEqual(value, 42)
-            self.assertIs(x2, x)
-            self.assertIs(y2, y)
-            self.assertIs(z2, z)
+            assert value == 42
+            assert x2 is x
+            assert y2 is y
+            assert z2 is z
 
             del o, x, x2, y, y2, z, z2
 
     def test_list_create(self):
         with check_numba_allocations(self, (lambda: dict(x=MyPassThru(), y=MyPassThru(), z=MyPassThru()))) as (x, y, z):
-            o1 = PassThruComplex(42, x, [y, z])
-            o2 = PassThruComplex(43, x, [y, z])
+            o1 = PassThruComplex(42, x, typed.List([y, z]))
+            o2 = PassThruComplex(43, x, typed.List([y, z]))
 
             l = create_passthru_list(o1, o2)
 
-            self.assertEqual(o1.int_attr, 42)
-            self.assertEqual(o2.int_attr, 43)
-            self.assertIs(o1.passthru_attr, x)
-            self.assertEqual(o1.list_attr[0], y)
-            self.assertEqual(o1.list_attr[1], z)
+            assert o1.int_attr == 42
+            assert o2.int_attr == 43
+            assert o1.passthru_attr is x
+            assert o1.list_attr[0] is y
+            assert o1.list_attr[1] is z
 
             del l, o1, o2, x, y, z
 
@@ -437,22 +420,22 @@ class PassThruComplexTest(TestCase):
             return the_copy  # y
 
         with check_numba_allocations(self, (lambda: dict(x=MyPassThru(), y=MyPassThru(), z=MyPassThru()))) as (x, y, z):
-            o = PassThruComplex(42, x, [y, z])
+            o = PassThruComplex(42, x, typed.List([y, z]))
 
             l2 = copy_list(o)
 
-            self.assertIs(l2[0], y)
-            self.assertIs(l2[1], z)
+            assert l2[0] is y
+            assert l2[1] is z
 
             del o, l2, x, y, z
 
     def test_list_identity(self):
         with check_numba_allocations(self, (lambda: dict(x=MyPassThru(), y=MyPassThru(), z=MyPassThru()))) as (x, y, z):
-            o = PassThruComplex(42, x, [y, z])
+            o = PassThruComplex(42, x, typed.List([y, z]))
 
             l = [o, o, o]
             l2 = identity(l)
-            self.assertIs(l, l2)
+            assert l is l2
             del o, x, y, z, l, l2
 
     def test_list_forget(self):
@@ -464,7 +447,7 @@ class PassThruComplexTest(TestCase):
             x = MyPassThru()
             y = MyPassThru()
             z = MyPassThru()
-            o = PassThruComplex(42, x, [y, z])
+            o = PassThruComplex(42, x, typed.List([y, z]))
             l = [o, o, o]
 
             return dict(l=l, o=o, x=x, y=y, z=z)
@@ -473,7 +456,7 @@ class PassThruComplexTest(TestCase):
             one = forget_list(l)
             one = forget_list(l)
             # one = forget_list(l)
-            self.assertIs(one, 1)
+            assert one is 1
             del x, y, z, l, o
 
 
