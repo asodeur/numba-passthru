@@ -161,7 +161,7 @@ def box_testee(typ, val, context):
 Given the implementation above `TesteeType` is immutable from `nopython` (`make_attribute_wrapper` creates read-only
 attributes). If you made a pass-through type mutable from `nopython` you had to make sure to reflect changes back
 to the Python object in the boxer. However, given the [experience with reflected lists and sets](http://numba.pydata.org/numba-doc/latest/reference/deprecation.html#deprecation-of-reflection-for-list-and-set-types)
-there are good reasons to be careful with this. 
+there are good reasons to be careful about this. 
 
 Upward compatibility notice
 ---------------------------
@@ -169,9 +169,8 @@ This is a stand-alone version of Numba [PR 3640](https://github.com/numba/numba/
 `PassThruType`, `pass_thru_type`, `PassThruContainer`, `pass_thru_container_type` from `numba` is attempted first 
 hence you will get the Numba internal implementations once the PR has landed.
 
-This package contains two overloads that might break future Numba versions if Numba created diverging implementations:
-1. `int(Opaque)`
-2. `operator.is_(Opaque, Opaque)`
+This package contains an overload of `int(Opaque)` (essentially `ptrtoint`) that might break future Numba versions 
+if Numba created diverging implementations.
 
 This was considered too unlikely to put a version constraint on the Numba dependency (which would require a new release
 of `numba-passthru` every time a new Numba versions is released)

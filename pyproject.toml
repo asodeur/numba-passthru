@@ -28,7 +28,7 @@ packages = [
 
 [tool.poetry.dependencies]
 python = ">=3.6"
-numba = "^0.51.2"
+numba = ">=0.51.2"
 
 [tool.poetry.dev-dependencies]
 pytest = "^6.1.1"
