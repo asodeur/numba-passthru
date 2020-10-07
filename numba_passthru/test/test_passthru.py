@@ -133,11 +133,11 @@ class TestPassThruContainer:
         with pytest.raises(TypingError) as context:
             r = container_eq_any(c1, 1)
 
+        msg = str(context.value)
         assert (
-             str(context.value).startswith(
-                 'Failed in nopython mode pipeline (step: nopython frontend)\n\x1b[1m\x1b[1m'
-                 'No implementation of function Function(<built-in function eq>) found for signature:'
-             )
+            'Failed in nopython mode pipeline (step: nopython frontend)' in msg
+            and 'No implementation of function Function(<built-in function eq>) found for signature:' in msg
+            and 'eq(PassThruContainerType, int64)' in msg
         )
 
         with pytest.raises(NotImplementedError):
@@ -146,11 +146,11 @@ class TestPassThruContainer:
         with pytest.raises(TypingError) as context:
             r = container_eq_any(1, c1)
 
+        msg = str(context.value)
         assert (
-            str(context.value).startswith(
-                'Failed in nopython mode pipeline (step: nopython frontend)\n\x1b[1m\x1b[1m'
-                'No implementation of function Function(<built-in function eq>) found for signature:'
-            )
+            'Failed in nopython mode pipeline (step: nopython frontend)' in msg
+            and 'No implementation of function Function(<built-in function eq>) found for signature:' in msg
+            and 'eq(int64, PassThruContainerType)' in msg
         )
 
     def test_hash(self):
@@ -433,9 +433,11 @@ class TestPassThruComplex:
         with check_numba_allocations(self, (lambda: dict(x=MyPassThru(), y=MyPassThru(), z=MyPassThru()))) as (x, y, z):
             o = PassThruComplex(42, x, typed.List([y, z]))
 
-            l = [o, o, o]
+            l = typed.List([o, o, o])
             l2 = identity(l)
-            assert l is l2
+            for ii in range(3):
+                assert l[ii] is l2[ii]
+
             del o, x, y, z, l, l2
 
     def test_list_forget(self):
@@ -448,7 +450,7 @@ class TestPassThruComplex:
             y = MyPassThru()
             z = MyPassThru()
             o = PassThruComplex(42, x, typed.List([y, z]))
-            l = [o, o, o]
+            l = typed.List([o, o, o])
 
             return dict(l=l, o=o, x=x, y=y, z=z)
 
