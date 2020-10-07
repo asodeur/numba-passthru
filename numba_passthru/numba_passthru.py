@@ -147,25 +147,6 @@ except ImportError:
         return opaque_to_int_typer
 
 
-    @lower_builtin(is_, types.Opaque, types.Opaque)
-    def opaque_is(context, builder, sig, args):
-        """
-        Implementation for `x is y` for Opaque types. `x is y` iff the pointers are equal
-        """
-        # TODO: would like to use high-level extension here (int(x) == int(y)), however
-        #  currently @overload(is_) does not seem to work, generic impl takes precedence
-
-        lhs_type, rhs_type = sig.args
-        # the lhs and rhs have the same type
-        if lhs_type == rhs_type:
-            lhs_ptr = builder.ptrtoint(args[0], cgutils.intp_t)
-            rhs_ptr = builder.ptrtoint(args[1], cgutils.intp_t)
-
-            return builder.icmp_unsigned('==', lhs_ptr, rhs_ptr)
-        else:
-            return cgutils.false_bit
-
-
     @overload(eq)
     def pass_thru_container_eq(x, y):
         if x is pass_thru_container_type and y is pass_thru_container_type:
