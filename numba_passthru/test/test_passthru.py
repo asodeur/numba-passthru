@@ -1,12 +1,12 @@
 from contextlib import contextmanager
 import gc
 from numba import jit, objmode, types, TypingError
-from numba import cgutils
-from numba.config import MACHINE_BITS
-from numba.datamodel import models
-from numba.errors import NumbaDeprecationWarning, NumbaPendingDeprecationWarning
+from numba.core import cgutils
+from numba.core.config import MACHINE_BITS
+from numba.core.datamodel import models
+from numba.core.errors import NumbaDeprecationWarning, NumbaPendingDeprecationWarning
 from numba.extending import box, NativeValue, register_model, typeof_impl, unbox, make_attribute_wrapper
-from numba.runtime.nrt import rtsys
+from numba.core.runtime.nrt import rtsys
 from numba_passthru import PassThruContainer, PassThruType, pass_thru_type
 from sys import getrefcount
 from unittest import TestCase
@@ -142,7 +142,10 @@ class PassThruContainerTest(TestCase):
             r = container_eq_any(c1, 1)
 
         self.assertTrue(
-            'Invalid use of Function(<built-in function eq>) with argument(s) of type(s)' in str(context.exception)
+             str(context.exception).startswith(
+                 'Failed in nopython mode pipeline (step: nopython frontend)\n\x1b[1m\x1b[1m'
+                 'No implementation of function Function(<built-in function eq>) found for signature:'
+             )
         )
 
         with self.assertRaises(NotImplementedError) as context:
@@ -152,7 +155,10 @@ class PassThruContainerTest(TestCase):
             r = container_eq_any(1, c1)
 
         self.assertTrue(
-            'Invalid use of Function(<built-in function eq>) with argument(s) of type(s)' in str(context.exception)
+            str(context.exception).startswith(
+                'Failed in nopython mode pipeline (step: nopython frontend)\n\x1b[1m\x1b[1m'
+                'No implementation of function Function(<built-in function eq>) found for signature:'
+            )
         )
 
     def test_hash(self):

@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "numba-passthru"
-version = "0.2.0"
+version = "0.3.0"
 description = "Stand-alone package for Numba passthrough types until PR 3640 has landed"
 authors = ["Andreas Sodeur <andreas.sodeur@rwe.com>"]
 readme = "README.md"
@@ -27,11 +27,11 @@ packages = [
 # include = ["tox.ini"]
 
 [tool.poetry.dependencies]
-python = ">=2.7,!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*"
-numba = "*"
+python = ">=3.6"
+numba = "^0.51.2"
 
 [tool.poetry.dev-dependencies]
-pytest = "^4.0.0"
+pytest = "^6.1.1"
 
 [build-system]
 requires = ["poetry>=0.12"]
