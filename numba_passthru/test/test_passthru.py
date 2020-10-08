@@ -461,6 +461,27 @@ class TestPassThruComplex:
             assert one is 1
             del x, y, z, l, o
 
+    def test_pass_thru_type_eq(self):
+        def create_tracked():
+            x = MyPassThru()
+            y = MyPassThru()
+            z = MyPassThru()
+            a = PassThruComplex(42, x, typed.List([y, z]))
+            b = PassThruComplex(42, y, typed.List([z, y]))
+
+            return dict(a=a, b=b)
+
+        @jit(nopython=True)
+        def pass_thru_type_eq(a, b):
+            return a.passthru_attr == b.passthru_attr, a.passthru_attr != b.passthru_attr
+
+        with check_numba_allocations(self, create_tracked) as (x, y):
+            for a in (x, y):
+                for b in (x, y):
+                    assert pass_thru_type_eq(a, b) == pass_thru_type_eq.py_func(a, b)
+
+            del a, b, x, y
+
 
 ############################ test functions ############################
 # test function for basic allocation tests
