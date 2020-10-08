@@ -5,12 +5,12 @@
 from llvmlite.llvmpy.core import Constant
 from numba.core import cgutils, types
 from numba.core.datamodel import models
-from numba.extending import make_attribute_wrapper, overload, overload_method, register_model, type_callable
+from numba.extending import intrinsic, make_attribute_wrapper, overload, overload_method, register_model, type_callable
 from numba.core.pythonapi import NativeValue, unbox, box
 from numba.cpython.hashing import _Py_hash_t
 from numba.core.imputils import lower_builtin
 from numba.core.typing.typeof import typeof_impl
-from operator import is_, eq
+from operator import eq, ne
 
 
 __all__ = ['PassThruContainer', 'pass_thru_container_type']
@@ -29,7 +29,6 @@ except ImportError:
         """Wraps arbitrary Python objects to pass around *nopython-mode*. The created MemInfo will aquire a
            reference to the Python object.
         """
-
         def __init__(self, name=None):
             super(PassThruType, self).__init__(name or self.__class__.__name__)
 
@@ -63,6 +62,44 @@ except ImportError:
         context.context.nrt.decref(context.builder, typ, val._getvalue())
 
         return obj
+
+
+    @intrinsic
+    def _passthru_get_object(tyctx, x):
+        assert x == pass_thru_type
+        funtion_sig = opaque_pyobject(x)  # the function signature for this intrinsic
+
+        def codegen(cgctx, builder, signature, args):
+            x = cgutils.create_struct_proxy(signature.args[0])(cgctx, builder, value=args[0])
+            x_obj = cgctx.nrt.meminfo_data(builder, x.meminfo)
+
+            return x_obj
+
+        return funtion_sig, codegen
+
+
+    @overload(eq)
+    def passthru_eq(x, y):
+        # This should be overloading operator.is_ but the generic implementation is overreaching which
+        # prevents implementing operator.is_ using the high-level interface, see
+        # https://github.com/numba/numba/blob/5eda874dc0da11edd0d6b1337985e9f7a5d25d6f/numba/cpython/builtins.py#L45
+        if x == pass_thru_type and y == pass_thru_type:
+            def passthru_eq_impl(x, y):
+                return _passthru_get_object(x) is _passthru_get_object(y)
+
+            return passthru_eq_impl
+
+
+    @overload(ne)
+    def passthru_ne(x, y):
+        # This should be overloading operator.is_not but the generic implementation is overreaching which
+        # prevents implementing operator.is_not using the high-level interface, see
+        # https://github.com/numba/numba/blob/5eda874dc0da11edd0d6b1337985e9f7a5d25d6f/numba/cpython/builtins.py#L45
+        if x == pass_thru_type and y == pass_thru_type:
+            def passthru_ne_impl(x, y):
+                return _passthru_get_object(x) is not _passthru_get_object(y)
+
+            return passthru_ne_impl
 
 
     class PassThruContainer(object):
